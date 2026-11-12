@@ -14,9 +14,20 @@ Check [our Devices page](https://crosspointreader.com/devices) for the full list
 
 > If you're planning to buy an Xteink device, consider purchasing an **X3/X4 Developer Edition** through https://crosspointreader.com. CrossPoint receives a small share of each sale, helping fund development costs.
 
+## Burmese (Myanmar) support
+
+This fork adds Burmese reading to the `burmese-x4c` build for the Xteink X4C (ESP32-S3). The upstream project is unchanged otherwise.
+
+- **Shaping**: Burmese is shaped with [HarfBuzz](https://harfbuzz.github.io/) using the font's OpenType `mym2` features (conjuncts, medials, and reordered vowel signs). Use **Pyidaungsu 2.5.3 or newer** from `/fonts/`; Pyidaungsu 1.x only exposes the legacy `mymr` script and will not shape correctly.
+- **Line breaking**: words wrap between syllables, never inside one, and never with a hyphen inserted. Breaks are allowed only after a completed syllable (asat, tone mark, or punctuation), so clusters such as `ပျက်` stay together. This works with the **Hyphenation** setting both **on and off**.
+- **Fonts**: install the font on the SD card as described in [Custom SD-card fonts](#custom-sd-card-fonts); see [docs/sd-card-fonts.md](./docs/sd-card-fonts.md#indic-scripts) for the Burmese preset and download family.
+- **Build marker**: the version string reports `1.6.5-x4c-burmese` so the About screen confirms the build.
+
+The rest of this README is the upstream CrossPoint documentation.
+
 ## What can CrossPoint do?
 
-- **Reader engine**: EPUB 2/3 rendering with embedded-style option, image handling, hyphenation, kerning, adaptive table layouts, native CJK ruby annotations, chapter navigation, footnotes, bookmarks, dictionary lookups ([StarDict](docs/dictionary.md)), go-to-percent, auto page turn, orientation control, focus reading, KOReader progress sync and more.
+- **Reader engine**: EPUB 2/3 rendering with embedded-style option, image handling, hyphenation, kerning, adaptive table layouts, native CJK ruby annotations, chapter navigation, footnotes, bookmarks, dictionary lookups ([StarDict](docs/dictionary.md)), go-to-percent, auto page turn, orientation control, focus reading, KOReader progress sync and more. This fork adds shaped **Burmese (Myanmar)** text that wraps at syllable boundaries (see [Burmese (Myanmar) support](#burmese-myanmar-support)).
 
 - **Various formats**: native handling for `.epub`, `.xtc/.xtch`, `.txt`, and `.bmp`.
 
