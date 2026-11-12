@@ -181,6 +181,14 @@ std::vector<Hyphenator::BreakInfo> Hyphenator::breakOffsets(const std::string& w
   // Convert to codepoints and normalize word boundaries.
   auto cps = collectCodepoints(word);
   trimSurroundingPunctuationAndFootnote(cps);
+
+  // Burmese is written without hyphenation. ParsedText offers no-hyphen breaks
+  // at Myanmar syllable boundaries instead; returning none here also keeps the
+  // generic Liang fallback from inserting a '-' inside a word.
+  if (std::any_of(cps.begin(), cps.end(), [](const CodepointInfo& cp) { return indic::isMyanmar(cp.value); })) {
+    return {};
+  }
+
   const auto* hyphenator = cachedHyphenator_;
 
   // Detect apostrophe-like separators early; used by both branches below.

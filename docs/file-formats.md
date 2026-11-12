@@ -90,6 +90,15 @@ if (parsedSize != fileSize) {
 
 ## `section.bin`
 
+### Version 50
+
+Version 50 adds Myanmar (Burmese) to the shaped scripts. Burmese is written
+without spaces between every syllable and without hyphenation, so line breaks
+are placed at syllable boundaries (never inside a stacked consonant or before a
+dependent sign), and U+200B requests an explicit break. Pyidaungsu 2.5.3 and
+other `mym2`/`mymr` fonts shape through HarfBuzz; cached word positions from
+version 49 no longer match.
+
 ### Version 49
 
 Version 49 shapes Indic text (Devanagari, Bengali, Gurmukhi, Gujarati, Oriya,

@@ -47,6 +47,7 @@ scriptGroups:
   - {tag: kannada, label: Kannada}
   - {tag: malayalam, label: Malayalam}
   - {tag: sinhala, label: Sinhala}
+  - {tag: myanmar, label: Burmese}
   - {tag: georgian, label: Georgian}
   - {tag: armenian, label: Armenian}
   - {tag: ethiopic, label: Ethiopic}
@@ -551,6 +552,15 @@ families:
     styles:
       regular: {url: "https://raw.githubusercontent.com/notofonts/notofonts.github.io/main/fonts/NotoSerifSinhala/hinted/ttf/NotoSerifSinhala-Regular.ttf"}
       bold:    {url: "https://raw.githubusercontent.com/notofonts/notofonts.github.io/main/fonts/NotoSerifSinhala/hinted/ttf/NotoSerifSinhala-Bold.ttf"}
+
+  - name: Pyidaungsu
+    description: "Burmese (Myanmar) sans-serif with shaping (Burmese, Latin)"
+    scripts: [myanmar, latin]
+    intervals: myanmar,latin-ext,punctuation
+    sizes: [8, 10, 12, 14, 16, 18]
+    styles:
+      regular: {url: "https://raw.githubusercontent.com/mcfnlp/Pyidaungsu/master/Pyidaungsu2.5.3/Release/Pyidaungsu-2.5.3_Regular.ttf"}
+      bold:    {url: "https://raw.githubusercontent.com/mcfnlp/Pyidaungsu/master/Pyidaungsu2.5.3/Release/Pyidaungsu-2.5.3_Bold.ttf"}
 
   # ── Korean ─────────────────────────────────────────────────────────────
 

@@ -94,6 +94,11 @@ constexpr PreBaseVowel kSinhalaPreBase[] = {
     {0x0DD9, 0x0DD9, {}},       {0x0DDA, 0x0DD9, {0x0DCA}},         {0x0DDB, 0x0DDB, {}},
     {0x0DDC, 0x0DD9, {0x0DCF}}, {0x0DDD, 0x0DD9, {0x0DCF, 0x0DCA}}, {0x0DDE, 0x0DD9, {0x0DDF}}};
 
+// Myanmar: U+1031 (e-vowel) is stored after its consonant but drawn before it.
+// U+1039 stacks the next consonant; medials U+103B-U+103E stay after the base.
+constexpr CodepointRange kMyanmarConsonants[] = {{0x1000, 0x102A}};
+constexpr PreBaseVowel kMyanmarPreBase[] = {{0x1031, 0x1031, {}}};
+
 // Indexed like indic::SCRIPTS.
 constexpr ScriptRules kRules[] = {
     {span(kDevanagariConsonants), 0x0930, true, span(kDevanagariPreBase), span(kDevanagariNukta)},
@@ -106,6 +111,7 @@ constexpr ScriptRules kRules[] = {
     {span(kKannadaConsonants), 0x0CB0, true, {}, {}},
     {span(kMalayalamConsonants), 0x0D30, true, span(kMalayalamPreBase), {}},
     {span(kSinhalaConsonants), 0x0DBB, false, span(kSinhalaPreBase), {}},
+    {span(kMyanmarConsonants), 0x101B, true, span(kMyanmarPreBase), {}},
 };
 static_assert(sizeof(kRules) / sizeof(kRules[0]) == indic::SCRIPT_COUNT, "one rule set per indic::SCRIPTS entry");
 
@@ -113,7 +119,7 @@ static_assert(sizeof(kRules) / sizeof(kRules[0]) == indic::SCRIPT_COUNT, "one ru
 constexpr bool rulesMatchScripts() {
   for (size_t i = 0; i < indic::SCRIPT_COUNT; i++) {
     const auto inBlock = [i](const uint32_t cp) {
-      return cp == 0 || (cp >= indic::SCRIPTS[i].first && cp <= indic::SCRIPTS[i].last());
+      return cp == 0 || (cp >= indic::SCRIPTS[i].first && cp <= indic::SCRIPTS[i].last);
     };
     if (!inBlock(kRules[i].ra)) return false;
     for (const auto& r : kRules[i].consonants) {

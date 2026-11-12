@@ -36,26 +36,28 @@ FLASH_SLOT_BYTES = 128 * 1024
 
 
 class Script(NamedTuple):
-    first: int  # first codepoint of the 128-codepoint Unicode block
-    ot_tags: tuple  # OpenType script tags: Indic v1 and v2 (Sinhala has one)
+    first: int  # first codepoint of the script's Unicode block
+    last: int  # last codepoint of the script's Unicode block
+    ot_tags: tuple  # OpenType script tags, v2 before v1 (Myanmar: mym2, mymr)
     probe: int  # letter KA: a font that maps it draws the script
 
     def unicodes(self):
-        return range(self.first, self.first + 0x80)
+        return range(self.first, self.last + 1)
 
 
 # Mirrors indic::SCRIPTS in lib/Utf8/IndicScripts.h.
 SCRIPTS = {
-    "devanagari": Script(0x0900, ("deva", "dev2"), 0x0915),
-    "bengali":    Script(0x0980, ("beng", "bng2"), 0x0995),
-    "gurmukhi":   Script(0x0A00, ("guru", "gur2"), 0x0A15),
-    "gujarati":   Script(0x0A80, ("gujr", "gjr2"), 0x0A95),
-    "oriya":      Script(0x0B00, ("orya", "ory2"), 0x0B15),
-    "tamil":      Script(0x0B80, ("taml", "tml2"), 0x0B95),
-    "telugu":     Script(0x0C00, ("telu", "tel2"), 0x0C15),
-    "kannada":    Script(0x0C80, ("knda", "knd2"), 0x0C95),
-    "malayalam":  Script(0x0D00, ("mlym", "mlm2"), 0x0D15),
-    "sinhala":    Script(0x0D80, ("sinh",), 0x0D9A),
+    "devanagari": Script(0x0900, 0x097F, ("deva", "dev2"), 0x0915),
+    "bengali":    Script(0x0980, 0x09FF, ("beng", "bng2"), 0x0995),
+    "gurmukhi":   Script(0x0A00, 0x0A7F, ("guru", "gur2"), 0x0A15),
+    "gujarati":   Script(0x0A80, 0x0AFF, ("gujr", "gjr2"), 0x0A95),
+    "oriya":      Script(0x0B00, 0x0B7F, ("orya", "ory2"), 0x0B15),
+    "tamil":      Script(0x0B80, 0x0BFF, ("taml", "tml2"), 0x0B95),
+    "telugu":     Script(0x0C00, 0x0C7F, ("telu", "tel2"), 0x0C15),
+    "kannada":    Script(0x0C80, 0x0CFF, ("knda", "knd2"), 0x0C95),
+    "malayalam":  Script(0x0D00, 0x0D7F, ("mlym", "mlm2"), 0x0D15),
+    "sinhala":    Script(0x0D80, 0x0DFF, ("sinh",), 0x0D9A),
+    "myanmar":    Script(0x1000, 0x109F, ("mym2", "mymr"), 0x1000),
 }
 
 # Codepoints every Indic script shares (indic::isShared): dandas, ZWNJ/ZWJ

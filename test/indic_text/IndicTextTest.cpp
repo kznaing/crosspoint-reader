@@ -115,12 +115,14 @@ TEST(IndicScripts, MapsEachBlockToItsScript) {
   EXPECT_EQ(indic::scriptOf(0x0E01), nullptr);  // Thai
   for (const indic::ScriptInfo& script : indic::SCRIPTS) {
     EXPECT_EQ(indic::scriptOf(script.first), &script) << script.name;
-    EXPECT_EQ(indic::scriptOf(script.last()), &script) << script.name;
+    EXPECT_EQ(indic::scriptOf(script.last), &script) << script.name;
     EXPECT_EQ(indic::scriptOf(script.probe), &script) << script.name;
   }
   EXPECT_STREQ(indic::scriptOf(0x0915)->name, "Devanagari");
   EXPECT_STREQ(indic::scriptOf(0x0B95)->name, "Tamil");
   EXPECT_STREQ(indic::scriptOf(0x0D9A)->name, "Sinhala");
+  EXPECT_STREQ(indic::scriptOf(0x1000)->name, "Myanmar");
+  EXPECT_EQ(indic::scriptOf(0x10A0), nullptr);  // Georgian, after the Myanmar block
 }
 
 TEST(IndicScripts, SharedCodepointsBelongToNoScript) {
@@ -140,18 +142,38 @@ TEST(IndicScripts, ByteScanFindsExactlyTheIndicBlocks) {
   EXPECT_TRUE(indic::containsIndic(cps({0x0900}).c_str()));
   EXPECT_TRUE(indic::containsIndic(("a " + cps({0x0B95})).c_str()));
   EXPECT_TRUE(indic::containsIndic(cps({0x0DFF}).c_str()));
+  EXPECT_TRUE(indic::containsIndic(cps({0x1000}).c_str()));
+  EXPECT_TRUE(indic::containsIndic(("a " + cps({0x109F})).c_str()));
+  EXPECT_FALSE(indic::containsIndic(cps({0x10A0}).c_str()));  // Georgian
+}
+
+TEST(IndicScripts, ByteScanFindsExactlyMyanmar) {
+  EXPECT_FALSE(indic::containsMyanmar(nullptr));
+  EXPECT_FALSE(indic::containsMyanmar("hello"));
+  EXPECT_FALSE(indic::containsMyanmar(cps({0x0900}).c_str()));   // Devanagari
+  EXPECT_FALSE(indic::containsMyanmar(cps({0x0E01}).c_str()));   // Thai
+  EXPECT_FALSE(indic::containsMyanmar(cps({0x10A0}).c_str()));   // Georgian
+  EXPECT_TRUE(indic::containsMyanmar(cps({0x1000}).c_str()));    // first Myanmar codepoint
+  EXPECT_TRUE(indic::containsMyanmar(cps({0x109F}).c_str()));    // last Myanmar codepoint
+  EXPECT_TRUE(indic::containsMyanmar(("a " + cps({0x1000})).c_str()));
+  EXPECT_TRUE(indic::containsMyanmar(cps({0x1080}).c_str()));    // the E1 82 third-byte form
 }
 
 TEST(IndicScripts, ClassifiesSigns) {
   EXPECT_TRUE(indic::isDependentSign(0x093F));   // Devanagari i
   EXPECT_TRUE(indic::isDependentSign(0x0BCD));   // Tamil pulli
   EXPECT_TRUE(indic::isDependentSign(0x0DDF));   // Sinhala gayanukitta
+  EXPECT_TRUE(indic::isDependentSign(0x1031));   // Myanmar e-vowel
+  EXPECT_TRUE(indic::isDependentSign(0x103A));   // Myanmar asat
+  EXPECT_TRUE(indic::isDependentSign(0x103B));   // Myanmar medial ya
   EXPECT_FALSE(indic::isDependentSign(0x0915));  // a consonant
   EXPECT_FALSE(indic::isDependentSign(0x0966));  // a digit
   EXPECT_FALSE(indic::isDependentSign(0x0300));  // combining, but not Indic
   EXPECT_TRUE(indic::isVirama(0x094D));
-  EXPECT_TRUE(indic::isVirama(0x0D3B));  // Malayalam vertical bar virama
-  EXPECT_TRUE(indic::isVirama(0x0DCA));  // Sinhala al-lakuna
+  EXPECT_TRUE(indic::isVirama(0x0D3B));   // Malayalam vertical bar virama
+  EXPECT_TRUE(indic::isVirama(0x0DCA));   // Sinhala al-lakuna
+  EXPECT_TRUE(indic::isVirama(0x1039));   // Myanmar virama
+  EXPECT_FALSE(indic::isVirama(0x103A));  // asat only closes a syllable
   EXPECT_FALSE(indic::isVirama(0x0DCF));
   EXPECT_TRUE(indic::isNukta(0x093C));
   EXPECT_FALSE(indic::isNukta(0x094D));
@@ -208,6 +230,49 @@ TEST(IndicReorder, MalayalamAndSinhala) {
             cps({SI_KA, AL_LAKUNA, KOMBUVA, SI_SSA}));
 }
 
+TEST(IndicReorder, Myanmar) {
+  constexpr uint32_t MY_KA = 0x1000, MY_RA = 0x101B, MY_E = 0x1031, MY_VIRAMA = 0x1039;
+  EXPECT_EQ(reorder(cps({MY_KA, MY_E})), cps({MY_E, MY_KA}));  // ကေ
+  EXPECT_EQ(reorder(cps({MY_KA, MY_VIRAMA, MY_KA, MY_E})),     // က္ကေ
+            cps({MY_E, MY_KA, MY_VIRAMA, MY_KA}));
+  EXPECT_EQ(reorder(cps({MY_RA, MY_VIRAMA, MY_KA, MY_E})),  // ရ္ကေ: ra+virama stays a spacing prefix
+            cps({MY_RA, MY_VIRAMA, MY_E, MY_KA}));
+  std::string out;
+  EXPECT_FALSE(indicReorderForDisplay(cps({MY_KA, 0x103A}).c_str(), out));  // က်: asat only
+}
+
+TEST(IndicLineBreaks, MyanmarSyllableBoundaries) {
+  constexpr uint32_t MY_KA = 0x1000, MY_E = 0x1031, MY_ASAT = 0x103A, MY_MEDIAL_YA = 0x103B, MY_VIRAMA = 0x1039;
+  EXPECT_FALSE(indic::syllableBreakAllowed(MY_KA, MY_E));          // before the e-vowel
+  EXPECT_FALSE(indic::syllableBreakAllowed(MY_KA, MY_ASAT));       // before asat
+  EXPECT_FALSE(indic::syllableBreakAllowed(MY_KA, MY_MEDIAL_YA));  // before a medial
+  EXPECT_FALSE(indic::syllableBreakAllowed(MY_VIRAMA, MY_KA));     // inside a stacked consonant
+  EXPECT_TRUE(indic::syllableBreakAllowed(MY_ASAT, MY_KA));        // after a closed syllable
+  EXPECT_TRUE(indic::syllableBreakAllowed(MY_E, MY_KA));           // between syllables
+  EXPECT_TRUE(indic::syllableBreakAllowed(MY_KA, MY_KA));
+  EXPECT_TRUE(indic::syllableBreakAllowed(indic::ZWSP, MY_KA));  // explicit break
+}
+
+TEST(IndicLineBreaks, MyanmarBreaksOnlyAfterACompletedSyllable) {
+  constexpr uint32_t MY_PA = 0x1015, MY_KA = 0x1000, MY_ASAT = 0x103A, MY_MEDIAL_YA = 0x103B,
+                     MY_TONE = 0x1036, MY_AA = 0x102C, MY_SECTION = 0x104B;
+  // ပျက် = ပ + medial ya + က + asat: no break after the medial.
+  EXPECT_FALSE(indic::myanmarBreakAllowed(MY_MEDIAL_YA, MY_KA));
+  // A bare consonant is still open, so a following consonant is not a boundary.
+  EXPECT_FALSE(indic::myanmarBreakAllowed(MY_KA, MY_KA));
+  // A vowel sign alone does not close the syllable (a final may still follow).
+  EXPECT_FALSE(indic::myanmarBreakAllowed(MY_AA, MY_KA));
+  // Completed syllables may break before a new base.
+  EXPECT_TRUE(indic::myanmarBreakAllowed(MY_ASAT, MY_KA));
+  EXPECT_TRUE(indic::myanmarBreakAllowed(MY_TONE, MY_KA));
+  EXPECT_TRUE(indic::myanmarBreakAllowed(MY_SECTION, MY_KA));
+  // ZWSP always breaks after itself; a dependent sign still may not start a line.
+  EXPECT_TRUE(indic::myanmarBreakAllowed(indic::ZWSP, MY_KA));
+  EXPECT_FALSE(indic::myanmarBreakAllowed(MY_ASAT, MY_MEDIAL_YA));
+  // Non-Myanmar pairs are not our business.
+  EXPECT_FALSE(indic::myanmarBreakAllowed('a', 'b'));
+}
+
 TEST(IndicReorder, LeavesScriptsWithoutPreBaseVowelsAlone) {
   std::string out;
   EXPECT_FALSE(indicReorderForDisplay(cps({0x0C15, 0x0C3F}).c_str(), out));  // Telugu కి
@@ -226,5 +291,7 @@ TEST(IndicLineBreaks, NeverSplitASyllableInAnyScript) {
   EXPECT_FALSE(indic::syllableBreakAllowed(0x0DCA, indic::ZWJ));
   EXPECT_FALSE(indic::syllableBreakAllowed(indic::ZWJ, 0x0DC2));
   EXPECT_TRUE(indic::syllableBreakAllowed(DEVA_I, DEVA_KA));
-  EXPECT_TRUE(indic::syllableBreakAllowed(0x0C3F, 0x0C15));  // Telugu: after a vowel sign
+  EXPECT_TRUE(indic::syllableBreakAllowed(0x0C3F, 0x0C15));   // Telugu: after a vowel sign
+  EXPECT_FALSE(indic::syllableBreakAllowed(0x1000, 0x1031));  // Myanmar e-vowel
+  EXPECT_FALSE(indic::syllableBreakAllowed(0x1039, 0x1000));  // Myanmar stacked consonant
 }

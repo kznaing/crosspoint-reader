@@ -3,6 +3,7 @@
 #include <BidiUtils.h>
 #include <ComplexShaper.h>
 #include <GfxRenderer.h>
+#include <IndicScripts.h>
 #include <Logging.h>
 #include <Memory.h>
 #include <Utf8.h>
@@ -63,6 +64,41 @@ uint32_t lastCodepoint(const std::string_view word) {
   }
   const auto* ptr = reinterpret_cast<const unsigned char*>(word.data() + i);
   return utf8NextCodepoint(&ptr);
+}
+
+// A Myanmar consonant or medial/virama: the codepoints that can appear before a
+// syllable is closed. Used to recognise a bare consonant cluster like "န" that a
+// final syllable (e.g. "ယ်") attaches to across a publisher-inserted boundary.
+bool isMyanmarConsonantOrJoiner(const uint32_t cp) {
+  return (cp >= 0x1000 && cp <= 0x1021) || cp == 0x1039 || (cp >= 0x103B && cp <= 0x103E);
+}
+
+// True when every codepoint is a Myanmar consonant/medial/virama, i.e. an open
+// consonant cluster with no vowel or final yet. "န" and "ပျ" qualify; "မာ" does not.
+bool isOpenMyanmarCluster(const std::string_view word) {
+  if (word.empty()) return false;
+  bool sawConsonant = false;
+  const auto* ptr = reinterpret_cast<const unsigned char*>(word.data());
+  const auto* const end = ptr + word.size();
+  while (ptr < end) {
+    const uint32_t cp = utf8NextCodepoint(&ptr);
+    if (cp >= 0x1000 && cp <= 0x1021) sawConsonant = true;
+    if (!isMyanmarConsonantOrJoiner(cp)) return false;
+  }
+  return sawConsonant;
+}
+
+// True when `word` is a Myanmar syllable that closes inside this token (has an
+// asat or tone mark), e.g. "ယ်" or "က်".
+bool isClosedMyanmarSyllable(const std::string_view word) {
+  const uint32_t first = firstCodepoint(word);
+  if (!indic::isMyanmar(first) || indic::isDependentSign(first)) return false;
+  const auto* ptr = reinterpret_cast<const unsigned char*>(word.data());
+  const auto* const end = ptr + word.size();
+  while (ptr < end) {
+    if (indic::myanmarSyllableEnd(utf8NextCodepoint(&ptr))) return true;
+  }
+  return false;
 }
 
 bool containsSoftHyphen(const std::string_view word) { return word.find(SOFT_HYPHEN_UTF8) != std::string_view::npos; }
@@ -182,6 +218,25 @@ std::vector<Hyphenator::BreakInfo> hangulLineEndBreaks(const std::string& word) 
     if ((utf8IsHangul(prev) || utf8IsHangul(cur)) && cjkBoundaryAllowsBreak(prev, cur)) {
       breaks.push_back({offset, false});
     }
+    prev = cur;
+  }
+  return breaks;
+}
+
+// Line-end split points inside a Myanmar word. Burmese does not hyphenate:
+// a break is legal only after a completed syllable (asat, tone mark or
+// punctuation), never after a consonant, medial or vowel that a final consonant
+// or dependent sign could still attach to. U+200B asks for one explicitly.
+std::vector<Hyphenator::BreakInfo> myanmarLineEndBreaks(const std::string& word) {
+  std::vector<Hyphenator::BreakInfo> breaks;
+  if (word.empty()) return breaks;
+  const auto* const start = reinterpret_cast<const unsigned char*>(word.c_str());
+  const auto* ptr = start;
+  uint32_t prev = utf8NextCodepoint(&ptr);
+  while (*ptr) {
+    const size_t offset = static_cast<size_t>(ptr - start);
+    const uint32_t cur = utf8NextCodepoint(&ptr);
+    if (indic::myanmarBreakAllowed(prev, cur)) breaks.push_back({offset, false});
     prev = cur;
   }
   return breaks;
@@ -343,8 +398,10 @@ bool isWordCharacter(uint32_t cp) {
 
   // General Punctuation Block, Currency, Math, Arrows, & Symbols (0x2000 - 0x2BFF)
   if (cp >= 0x2000 && cp <= 0x2BFF) {
-    // Explicitly allow smart quotes, reject all other general punctuation (em-dashes, etc.)
-    return cp == 0x2018 || cp == 0x2019;
+    // Explicitly allow smart quotes and the zero-width space, reject all other
+    // general punctuation (em-dashes, etc.). ZWSP stays inside the token so the
+    // line breaker can use it as a break opportunity.
+    return cp == 0x2018 || cp == 0x2019 || cp == indic::ZWSP;
   }
 
   // Latin-1 Punctuation Block (0x00A1 - 0x00BF)
@@ -445,6 +502,10 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
                          const bool attachToPrevious, const uint32_t visibleTextOffset, const uint8_t linkId) {
   if (word.empty()) return;
 
+  if (!hasMyanmar && indic::containsMyanmar(word.c_str())) {
+    hasMyanmar = true;
+  }
+
   // The device fonts carry no combining-mark positioning, so EPUB text stored in NFD
   // (a base letter followed by separate combining accents -- common for Vietnamese,
   // and used for many EPUB <h1> chapter headings) renders with the marks detached or
@@ -495,6 +556,19 @@ void ParsedText::addWord(std::string word, const EpdFontFamily::Style fontStyle,
       hasCjkBreakOpportunityBetween(lastCodepoint(wordStore.view(words.back())), firstCodepoint(word))) {
     effectiveAttachToPrevious = false;
     effectiveNoSpaceBefore = true;
+  }
+
+  // Publishers split Myanmar syllables across tokens with stray spaces or inline markup
+  // (e.g. "န" + "ယ်"). Glue that boundary so the line breaker cannot stop inside the
+  // syllable. When the source had a real space, keep it as a visible but unbreakable
+  // token, matching the no-break-space model.
+  if (!words.empty() && indic::isMyanmar(firstCodepoint(word))) {
+    const std::string_view prevWord = wordStore.view(words.back());
+    if (indic::isMyanmar(lastCodepoint(prevWord)) && isOpenMyanmarCluster(prevWord) &&
+        isClosedMyanmarSyllable(word)) {
+      effectiveAttachToPrevious = true;
+      effectiveNoSpaceBefore = false;
+    }
   }
 
   // Bulk-reserve the per-token parallel arrays before a burst of pushes so they
@@ -793,10 +867,13 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
   auto wordWidths = calculateWordWidths(renderer, fontId);
 
   std::vector<size_t> lineBreakIndices;
-  if (hyphenationEnabled) {
-    // Use greedy layout that can split words mid-loop when a hyphenated prefix fits.
-    lineBreakIndices =
-        computeHyphenatedLineBreaks(renderer, fontId, pageWidth, wordWidths, wordContinues, wordNoSpaceBefore);
+  if (hyphenationEnabled || hasMyanmar) {
+    // Myanmar breaks at syllable boundaries, not spaces. The greedy layout tries those breaks
+    // before falling back to a word boundary, so use it even when hyphenation is off. In that
+    // case allowHyphenation is false: Myanmar/Hangul no-hyphen breaks remain available, but
+    // Latin/Liang hyphenation stays disabled.
+    lineBreakIndices = computeHyphenatedLineBreaks(renderer, fontId, pageWidth, wordWidths, wordContinues,
+                                                   wordNoSpaceBefore, /*allowHyphenation=*/hyphenationEnabled);
   } else {
     lineBreakIndices = computeLineBreaks(renderer, fontId, pageWidth, wordWidths, wordContinues, wordNoSpaceBefore);
   }
@@ -1027,7 +1104,8 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
     // First word needs to fit in reduced width if there's an indent
     const int effectiveWidth = i == 0 ? pageWidth - firstLineIndent : pageWidth;
     while (wordWidths[i] > effectiveWidth) {
-      if (!hyphenateWordAtIndex(i, effectiveWidth, renderer, fontId, wordWidths, /*allowFallbackBreaks=*/true)) {
+      if (!hyphenateWordAtIndex(i, effectiveWidth, renderer, fontId, wordWidths, /*allowFallbackBreaks=*/true,
+                                /*allowHyphenation=*/true)) {
         break;
       }
     }
@@ -1147,7 +1225,8 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
 std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& renderer, const int fontId,
                                                             const int pageWidth, std::vector<uint16_t>& wordWidths,
                                                             std::vector<bool>& continuesVec,
-                                                            std::vector<bool>& noSpaceBeforeVec) {
+                                                            std::vector<bool>& noSpaceBeforeVec,
+                                                            const bool allowHyphenation) {
   const int firstLineIndent = resolveFirstLineIndent(true, renderer, fontId);
 
   std::vector<size_t> lineBreakIndices;
@@ -1190,9 +1269,12 @@ std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& r
       // Word would overflow — try to split based on hyphenation points
       const int availableWidth = effectivePageWidth - lineWidth - spacing;
       const bool allowFallbackBreaks = isFirstWord;  // Only for first word on line
+      // A word wider than the page must still split even when hyphenation is off; the DP path
+      // did that in its oversized-word pre-pass, so keep the same safety net in greedy mode.
+      const bool allowHyphenationHere = allowHyphenation || wordWidths[currentIndex] > effectivePageWidth;
 
-      if (availableWidth > 0 &&
-          hyphenateWordAtIndex(currentIndex, availableWidth, renderer, fontId, wordWidths, allowFallbackBreaks)) {
+      if (availableWidth > 0 && hyphenateWordAtIndex(currentIndex, availableWidth, renderer, fontId, wordWidths,
+                                                     allowFallbackBreaks, allowHyphenationHere)) {
         // Prefix now fits; append it to this line and move to next line
         lineWidth += spacing + wordWidths[currentIndex];
         ++currentIndex;
@@ -1225,7 +1307,7 @@ std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& r
 // available width.
 bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availableWidth, const GfxRenderer& renderer,
                                       const int fontId, std::vector<uint16_t>& wordWidths,
-                                      const bool allowFallbackBreaks) {
+                                      const bool allowFallbackBreaks, const bool allowHyphenation) {
   // Guard against invalid indices or zero available width before attempting to split.
   if (availableWidth <= 0 || wordIndex >= words.size()) {
     return false;
@@ -1240,10 +1322,15 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
 
   // Collect candidate breakpoints (byte offsets and hyphen requirements). Focus emphasis is a byte
   // annotation, so the hyphenator sees the whole word and every legal break is reachable.
-  // Hangul breaks come first so they win a tie against a hyphenated break at the same width.
-  auto breakInfos = hangulLineEndBreaks(word);
-  const auto hyphenBreaks = Hyphenator::breakOffsets(word, allowFallbackBreaks);
-  breakInfos.insert(breakInfos.end(), hyphenBreaks.begin(), hyphenBreaks.end());
+  // Myanmar and Hangul breaks come first so they win a tie against a hyphenated break at the same
+  // width; neither script draws a hyphen.
+  auto breakInfos = myanmarLineEndBreaks(word);
+  const auto hangulBreaks = hangulLineEndBreaks(word);
+  breakInfos.insert(breakInfos.end(), hangulBreaks.begin(), hangulBreaks.end());
+  if (allowHyphenation) {
+    const auto hyphenBreaks = Hyphenator::breakOffsets(word, allowFallbackBreaks);
+    breakInfos.insert(breakInfos.end(), hyphenBreaks.begin(), hyphenBreaks.end());
+  }
   if (breakInfos.empty()) {
     return false;
   }

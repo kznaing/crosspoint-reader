@@ -142,7 +142,8 @@ Indic scripts need shaping: vowel signs move around their consonants,
 consonant clusters join into conjuncts (क्ष, ক্ষ, ஸ்ரீ), ra + virama becomes
 a reph above the next letter, and marks sit where the font places them.
 CrossPoint shapes these scripts with [HarfBuzz](https://harfbuzz.github.io/)
-using the font's own OpenType tables, on every device:
+using the font's own OpenType tables, on every device. Burmese (Myanmar) is
+shaped the same way, but words wrap between syllables without a hyphen:
 
 | Script | Languages (examples) | Preset | Download families |
 |---|---|---|---|
@@ -156,10 +157,15 @@ using the font's own OpenType tables, on every device:
 | Kannada | Kannada, Tulu | `kannada` | `NotoSansKannada`, `NotoSerifKannada` |
 | Malayalam | Malayalam | `malayalam` | `NotoSansMalayalam`, `NotoSerifMalayalam` |
 | Sinhala | Sinhala | `sinhala` | `NotoSansSinhala`, `NotoSerifSinhala` |
+| Myanmar (Burmese) | Burmese | `myanmar` | `Pyidaungsu` |
 
 - **Fonts.** The families above are on the font download page and already
   carry shaping data and Latin letters. Select one under
   **Settings > Reader > Font Family**.
+- **Burmese.** Use Pyidaungsu 2.5.3 or newer. Pyidaungsu 1.x exposes only the
+  legacy `mymr` script with `clig`/`liga` and does not carry the `mym2`
+  features Burmese shaping needs. The `myanmar` preset covers U+1000-U+109F
+  and embeds both `mym2` and `mymr` when the font provides them.
 - **Language.** Text is shaped in the book's language (its `dc:language`), so
   fonts that draw a script differently per language get it right: Marathi and
   Nepali use their own Devanagari letterforms and digits.
@@ -243,7 +249,7 @@ To make `.cpfont` files for any device, convert your TrueType/OpenType fonts:
 | `cyrillic` | Cyrillic + Supplement |
 | `hebrew` | Hebrew + Alphabetic Presentation Forms |
 | `arabic` | Arabic + Supplement + Extended-A + Presentation Forms A/B (RTL, contextual shaping) |
-| `devanagari`, `bengali`, `gurmukhi`, `gujarati`, `oriya`, `tamil`, `telugu`, `kannada`, `malayalam`, `sinhala` | One Indic script's block + dandas + joiners; embeds OpenType shaping data (see [Indic scripts](#indic-scripts)) |
+| `devanagari`, `bengali`, `gurmukhi`, `gujarati`, `oriya`, `tamil`, `telugu`, `kannada`, `malayalam`, `sinhala`, `myanmar` | One Indic script's block + dandas + joiners; embeds OpenType shaping data (see [Indic scripts](#indic-scripts)) |
 | `georgian` | Georgian + Georgian Supplement |
 | `armenian` | Armenian |
 | `ethiopic` | Ethiopic + Extended |

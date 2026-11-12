@@ -206,6 +206,41 @@ constexpr ExpectedShaping kSinhalaShaping[] = {
     {"\xE0\xB6\xBD\xE0\xB6\x82\xE0\xB6\x9A\xE0\xB7\x8F\xE0\xB7\x80", "", kSinhalaGlyphs5, 5},  // ලංකාව
 };
 
+constexpr ExpectedGlyph kMyanmarGlyphs0[] = {{45, 122, 0, 0}, {27, 361, 0, 0}, {22, 304, 0, 0},
+                                             {347, 0, 1, 0},  {27, 361, 0, 0}, {334, 243, 0, 0}};
+constexpr ExpectedGlyph kMyanmarGlyphs1[] = {{2, 599, 0, 0},   {332, 137, 0, 0}, {22, 304, 0, 0},  {347, 0, 1, 0},
+                                             {338, 330, 0, 0}, {18, 599, 0, 0},  {334, 243, 0, 0}, {347, 0, -1, 0}};
+constexpr ExpectedGlyph kMyanmarGlyphs2[] = {
+    {32, 601, 0, 0}, {3, 361, 0, 0}, {157, 0, -1, 0}, {348, 137, 0, 0}, {334, 243, 0, 0}};
+constexpr ExpectedGlyph kMyanmarGlyphs3[] = {{2, 599, 0, 0}, {179, 0, -8, 0}};
+constexpr ExpectedGlyph kMyanmarGlyphs4[] = {{338, 330, 0, 0}, {2, 599, 0, 0}};
+constexpr ExpectedGlyph kMyanmarGlyphs5[] = {{2, 599, 0, 0}, {348, 137, 0, 0}};
+constexpr ExpectedGlyph kMyanmarGlyphs6[] = {{166, 122, 0, 0}, {2, 599, 0, 0}};
+constexpr ExpectedGlyph kMyanmarGlyphs7[] = {{2, 599, 0, 0}, {46, 0, 0, 0}};
+constexpr ExpectedGlyph kMyanmarGlyphs8[] = {{2, 599, 0, 0}, {350, 0, 0, 0}};
+constexpr ExpectedGlyph kMyanmarGlyphs9[] = {{45, 122, 0, 0},  {23, 361, 0, 0}, {12, 591, 0, 0},  {347, 0, 0, 0},
+                                             {338, 330, 0, 0}, {19, 600, 0, 0}, {334, 243, 0, 0}, {6, 347, 0, 0},
+                                             {347, 0, 0, 0},   {7, 360, 0, 0},  {177, 0, -1, 0}};
+constexpr ExpectedGlyph kMyanmarGlyphs10[] = {{49, 332, 0, 0}, {50, 360, 0, 0}, {51, 330, 0, 0}};
+
+constexpr ExpectedShaping kMyanmarShaping[] = {
+    {"\xE1\x80\x99\xE1\x80\xBC\xE1\x80\x94\xE1\x80\xBA\xE1\x80\x99\xE1\x80\xAC", "", kMyanmarGlyphs0, 6},  // မြန်မာ
+    {"\xE1\x80\x80\xE1\x80\xBB\xE1\x80\xBD\xE1\x80\x94\xE1\x80\xBA\xE1\x80\x90\xE1\x80\xB1\xE1\x80\xAC\xE1\x80\xBA", "",
+     kMyanmarGlyphs1, 8},  // ကျွန်တော်
+    {"\xE1\x80\x9E\xE1\x80\x84\xE1\x80\xBA\xE1\x80\xB9\xE1\x80\x81\xE1\x80\xBB\xE1\x80\xAC", "", kMyanmarGlyphs2,
+     5},                                                               // သင်္ချာ
+    {"\xE1\x80\x80\xE1\x80\xB9\xE1\x80\x80", "", kMyanmarGlyphs3, 2},  // က္က
+    {"\xE1\x80\x80\xE1\x80\xB1", "", kMyanmarGlyphs4, 2},              // ကေ
+    {"\xE1\x80\x80\xE1\x80\xBB", "", kMyanmarGlyphs5, 2},              // ကျ
+    {"\xE1\x80\x80\xE1\x80\xBC", "", kMyanmarGlyphs6, 2},              // ကြ
+    {"\xE1\x80\x80\xE1\x80\xBD", "", kMyanmarGlyphs7, 2},              // ကွ
+    {"\xE1\x80\x80\xE1\x80\xBE", "", kMyanmarGlyphs8, 2},              // ကှ
+    {"\xE1\x80\x95\xE1\x80\xBC\xE1\x80\x8A\xE1\x80\xBA\xE1\x80\x91\xE1\x80\xB1\xE1\x80\xAC\xE1\x80\x84\xE1\x80\xBA\xE1"
+     "\x80\x85\xE1\x80\xAF",
+     "", kMyanmarGlyphs9, 11},                                          // ပြည်ထောင်စု
+    {"\xE1\x81\x81\xE1\x81\x82\xE1\x81\x83", "", kMyanmarGlyphs10, 3},  // ၁၂၃
+};
+
 constexpr ShapingFixture kShapingFixtures[] = {
     {"Bengali", "NotoSansBengali-Regular.layout", kBengaliShaping,
      sizeof(kBengaliShaping) / sizeof(kBengaliShaping[0])},
@@ -214,4 +249,6 @@ constexpr ShapingFixture kShapingFixtures[] = {
     {"Tamil", "NotoSansTamil-Regular.layout", kTamilShaping, sizeof(kTamilShaping) / sizeof(kTamilShaping[0])},
     {"Sinhala", "NotoSansSinhala-Regular.layout", kSinhalaShaping,
      sizeof(kSinhalaShaping) / sizeof(kSinhalaShaping[0])},
+    {"Myanmar", "NotoSansMyanmar-Regular.layout", kMyanmarShaping,
+     sizeof(kMyanmarShaping) / sizeof(kMyanmarShaping[0])},
 };

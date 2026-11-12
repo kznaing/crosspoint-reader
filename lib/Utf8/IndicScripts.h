@@ -15,11 +15,10 @@ namespace indic {
 
 struct ScriptInfo {
   const char* name;
-  uint32_t first;   // first codepoint of the script's 128-codepoint Unicode block
+  uint32_t first;   // first codepoint of the script's Unicode block
+  uint32_t last;    // last codepoint of the script's Unicode block
   uint32_t isoTag;  // ISO 15924 code packed big-endian, as hb_script_from_iso15924_tag() takes it
   uint32_t probe;   // letter KA: a font that maps it draws the script
-
-  constexpr uint32_t last() const { return first + 0x7F; }
 };
 
 constexpr uint32_t isoTag(const char (&code)[5]) {
@@ -27,31 +26,38 @@ constexpr uint32_t isoTag(const char (&code)[5]) {
          (static_cast<uint32_t>(code[2]) << 8) | static_cast<uint32_t>(code[3]);
 }
 
-// Consecutive Unicode blocks from U+0900, so scriptOf() is an index.
+// Sorted by block. The first ten are consecutive 128-codepoint blocks;
+// Myanmar is 160 codepoints (U+1000-U+109F), so scriptOf() cannot index by
+// block number and scans the table instead.
 inline constexpr ScriptInfo SCRIPTS[] = {
-    {"Devanagari", 0x0900, isoTag("Deva"), 0x0915},  // Hindi, Marathi, Nepali, Sanskrit
-    {"Bengali", 0x0980, isoTag("Beng"), 0x0995},     // Bengali, Assamese
-    {"Gurmukhi", 0x0A00, isoTag("Guru"), 0x0A15},    // Punjabi
-    {"Gujarati", 0x0A80, isoTag("Gujr"), 0x0A95},    // Gujarati
-    {"Oriya", 0x0B00, isoTag("Orya"), 0x0B15},       // Odia
-    {"Tamil", 0x0B80, isoTag("Taml"), 0x0B95},       // Tamil
-    {"Telugu", 0x0C00, isoTag("Telu"), 0x0C15},      // Telugu
-    {"Kannada", 0x0C80, isoTag("Knda"), 0x0C95},     // Kannada
-    {"Malayalam", 0x0D00, isoTag("Mlym"), 0x0D15},   // Malayalam
-    {"Sinhala", 0x0D80, isoTag("Sinh"), 0x0D9A},     // Sinhala
+    {"Devanagari", 0x0900, 0x097F, isoTag("Deva"), 0x0915},  // Hindi, Marathi, Nepali, Sanskrit
+    {"Bengali", 0x0980, 0x09FF, isoTag("Beng"), 0x0995},     // Bengali, Assamese
+    {"Gurmukhi", 0x0A00, 0x0A7F, isoTag("Guru"), 0x0A15},    // Punjabi
+    {"Gujarati", 0x0A80, 0x0AFF, isoTag("Gujr"), 0x0A95},    // Gujarati
+    {"Oriya", 0x0B00, 0x0B7F, isoTag("Orya"), 0x0B15},       // Odia
+    {"Tamil", 0x0B80, 0x0BFF, isoTag("Taml"), 0x0B95},       // Tamil
+    {"Telugu", 0x0C00, 0x0C7F, isoTag("Telu"), 0x0C15},      // Telugu
+    {"Kannada", 0x0C80, 0x0CFF, isoTag("Knda"), 0x0C95},     // Kannada
+    {"Malayalam", 0x0D00, 0x0D7F, isoTag("Mlym"), 0x0D15},   // Malayalam
+    {"Sinhala", 0x0D80, 0x0DFF, isoTag("Sinh"), 0x0D9A},     // Sinhala
+    {"Myanmar", 0x1000, 0x109F, isoTag("Mymr"), 0x1000},     // Burmese
 };
 inline constexpr size_t SCRIPT_COUNT = sizeof(SCRIPTS) / sizeof(SCRIPTS[0]);
 inline constexpr uint32_t FIRST_CODEPOINT = 0x0900;
-inline constexpr uint32_t LAST_CODEPOINT = 0x0DFF;
+inline constexpr uint32_t LAST_CODEPOINT = 0x109F;
 
-constexpr bool scriptsAreConsecutiveBlocks() {
+constexpr bool scriptsAreSortedAndDisjoint() {
+  uint32_t next = FIRST_CODEPOINT;
   for (size_t i = 0; i < SCRIPT_COUNT; i++) {
-    if (SCRIPTS[i].first != FIRST_CODEPOINT + 0x80 * i) return false;
+    if (SCRIPTS[i].first < next || SCRIPTS[i].last < SCRIPTS[i].first) return false;
+    if (SCRIPTS[i].probe < SCRIPTS[i].first || SCRIPTS[i].probe > SCRIPTS[i].last) return false;
+    next = SCRIPTS[i].last + 1;
   }
-  return SCRIPTS[SCRIPT_COUNT - 1].last() == LAST_CODEPOINT;
+  return SCRIPTS[SCRIPT_COUNT - 1].last == LAST_CODEPOINT;
 }
-static_assert(scriptsAreConsecutiveBlocks(), "scriptOf() indexes SCRIPTS by block");
+static_assert(scriptsAreSortedAndDisjoint(), "SCRIPTS must be sorted, disjoint, and span FIRST..LAST");
 
+constexpr uint32_t ZWSP = 0x200B;
 constexpr uint32_t ZWNJ = 0x200C;
 constexpr uint32_t ZWJ = 0x200D;
 constexpr uint32_t DOTTED_CIRCLE = 0x25CC;
@@ -68,25 +74,49 @@ constexpr bool isShared(const uint32_t cp) {
 // The script `cp` is written in, or nullptr for shared and non-Indic codepoints.
 constexpr const ScriptInfo* scriptOf(const uint32_t cp) {
   if (cp < FIRST_CODEPOINT || cp > LAST_CODEPOINT || isShared(cp)) return nullptr;
-  return &SCRIPTS[(cp - FIRST_CODEPOINT) >> 7];
+  for (const auto& script : SCRIPTS) {
+    if (cp >= script.first && cp <= script.last) return &script;
+  }
+  return nullptr;
 }
 
 constexpr size_t indexOf(const ScriptInfo& script) { return static_cast<size_t>(&script - SCRIPTS); }
 
+constexpr bool isMyanmar(const uint32_t cp) { return cp >= 0x1000 && cp <= 0x109F; }
+
 // True when `utf8` contains any codepoint of the Indic blocks. A byte scan:
-// U+0900-U+0DFF encode as E0 A4 xx .. E0 B7 xx.
+// U+0900-U+0DFF encode as E0 A4 xx .. E0 B7 xx; Myanmar U+1000-U+109F
+// encodes as E1 80 xx .. E1 82 9F (U+10A0 and above are Georgian).
 inline bool containsIndic(const char* utf8) {
   if (utf8 == nullptr) return false;
   for (const auto* p = reinterpret_cast<const unsigned char*>(utf8); *p; ++p) {
     if (p[0] == 0xE0 && p[1] >= 0xA4 && p[1] <= 0xB7) return true;
+    if (p[0] == 0xE1 && (p[1] == 0x80 || p[1] == 0x81 || (p[1] == 0x82 && p[2] >= 0x80 && p[2] <= 0x9F))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// True when `utf8` contains a Myanmar codepoint (U+1000-U+109F). Myanmar is
+// the only 160-codepoint block in the table, so it needs its own byte scan:
+// U+1000-U+107F encode as E1 80 xx / E1 81 xx, U+1080-U+109F as E1 82 80..9F.
+inline bool containsMyanmar(const char* utf8) {
+  if (utf8 == nullptr) return false;
+  for (const auto* p = reinterpret_cast<const unsigned char*>(utf8); *p; ++p) {
+    if (p[0] == 0xE1 && (p[1] == 0x80 || p[1] == 0x81 || (p[1] == 0x82 && p[2] >= 0x80 && p[2] <= 0x9F))) {
+      return true;
+    }
   }
   return false;
 }
 
 // Viramas (Unicode canonical combining class 9): they kill a consonant's
 // inherent vowel and, in most scripts, bind the next consonant into a conjunct.
-inline constexpr uint32_t VIRAMAS[] = {0x094D, 0x09CD, 0x0A4D, 0x0ACD, 0x0B4D, 0x0BCD,
-                                       0x0C4D, 0x0CCD, 0x0D3B, 0x0D3C, 0x0D4D, 0x0DCA};
+// Myanmar's U+1039 joins stacked consonants; U+103A (asat) only closes a
+// syllable, so it is deliberately not listed here.
+inline constexpr uint32_t VIRAMAS[] = {0x094D, 0x09CD, 0x0A4D, 0x0ACD, 0x0B4D, 0x0BCD, 0x0C4D,
+                                       0x0CCD, 0x0D3B, 0x0D3C, 0x0D4D, 0x0DCA, 0x1039};
 // Nuktas (combining class 7): a dot below that makes a new consonant.
 inline constexpr uint32_t NUKTAS[] = {0x093C, 0x09BC, 0x0A3C, 0x0ABC, 0x0B3C, 0x0C3C, 0x0CBC};
 
@@ -185,6 +215,16 @@ inline constexpr CodepointRange DEPENDENT_SIGNS[] = {
     {0x0DD6, 0x0DD6},
     {0x0DD8, 0x0DDF},
     {0x0DF2, 0x0DF3},
+    // Myanmar
+    {0x102B, 0x103E},
+    {0x1056, 0x1059},
+    {0x105E, 0x1060},
+    {0x1062, 0x1064},
+    {0x1067, 0x106D},
+    {0x1071, 0x1074},
+    {0x1082, 0x108D},
+    {0x108F, 0x108F},
+    {0x109A, 0x109D},
 };
 
 constexpr bool isDependentSign(const uint32_t cp) {
@@ -211,6 +251,26 @@ constexpr bool isDependentSign(const uint32_t cp) {
 constexpr bool syllableBreakAllowed(const uint32_t prev, const uint32_t cur) {
   const bool curBindsBack = isDependentSign(cur) || cur == ZWNJ || cur == ZWJ;
   return !curBindsBack && !isVirama(prev) && prev != ZWJ;
+}
+
+// A Myanmar codepoint that can only occur at the end of an orthographic
+// syllable: the asat, the tone/anusvara marks, and the various punctuation
+// signs. Consonants, medials, viramas and vowel signs stay "open" because a
+// following final consonant (e.g. ပျ + က်) or stacked consonant can still
+// attach to them, so breaking there would split a syllable.
+constexpr bool myanmarSyllableEnd(const uint32_t cp) {
+  return cp == 0x103A || (cp >= 0x1036 && cp <= 0x1038) || (cp >= 0x104A && cp <= 0x104F);
+}
+
+// Line break between two Myanmar codepoints. A break is legal only when the
+// left side is a completed syllable (myanmarSyllableEnd) and the right side
+// does not bind back into it. U+200B always allows a break after itself.
+constexpr bool myanmarBreakAllowed(const uint32_t prev, const uint32_t cur) {
+  if (prev == ZWSP) return true;
+  if (cur == ZWSP) return false;
+  if (!isMyanmar(prev) && !isMyanmar(cur)) return false;
+  if (!myanmarSyllableEnd(prev)) return false;
+  return syllableBreakAllowed(prev, cur);
 }
 
 }  // namespace indic

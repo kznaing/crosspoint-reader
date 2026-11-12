@@ -59,7 +59,7 @@ INTERVAL_PRESETS = {
     "hangul":      [(0xAC00, 0xD7AF), (0x1100, 0x11FF), (0x3130, 0x318F)],
     "cherokee":    [(0x13A0, 0x13FF), (0xAB70, 0xABBF)],
     "tifinagh":    [(0x2D30, 0x2D7F)],
-    # One preset per Indic script (devanagari, bengali, ..., sinhala; see
+    # One preset per Indic script (devanagari, bengali, ..., sinhala, myanmar; see
     # shaping_blob.SCRIPTS) is added below.
     # Symbol blocks commonly seen in scifi/popsci/literary fiction.
 
@@ -89,7 +89,7 @@ INTERVAL_PRESETS = {
 # uses. Fonts with GSUB also get a shaping section (conjuncts, reph,
 # positioned marks) — see shaping_blob.py.
 INTERVAL_PRESETS.update({
-    name: [(script.first, script.first + 0x7F), *shaping_blob.SHARED_INTERVALS]
+    name: [(script.first, script.last), *shaping_blob.SHARED_INTERVALS]
     for name, script in shaping_blob.SCRIPTS.items()
 })
 
